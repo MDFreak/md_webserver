@@ -5,6 +5,13 @@
   // --- webserver
     WebServer webServ(80);
     //md_server webMD   = md_server();
+    //#define WIFI_DEBUG_MODE  CFG_DEBUG_NONE
+    #ifndef WIFI_DEBUG_MODE
+        #define WIFI_DEBUG_MODE  CFG_DEBUG_STARTUP
+      #endif
+    #ifndef WIFI_DEBUG_MODE
+        #define WIFI_DEBUG_MODE  CFG_DEBUG_ACTIONS
+      #endif
   //
   // --- NTP server ---------------------
     unsigned int localPort = 2390;
@@ -255,13 +262,13 @@
           sleep(1);
 
           int cb = udp.parsePacket();
-            #if (DEBUG_MODE > CFG_DEBUG_NONE)
+            #if (WIFI_DEBUG_MODE > CFG_DEBUG_ACTIONS)
                 Serial.print("parsePacket cb = "); Serial.println(cb);
               #endif
           if (cb > 0)
             {
               cb = udp.read(packetBuffer, NTP_PACKET_SIZE);
-              #if (DEBUG_MODE > CFG_DEBUG_NONE)
+              #if (WIFI_DEBUG_MODE > CFG_DEBUG_ACTIONS)
                       Serial.print("read Packet cb = "); Serial.println(cb);
                 #endif
               if (cb == NTP_PACKET_SIZE)
@@ -323,7 +330,7 @@
         _locip   = (uint32_t) 0;
         _gateip  = (uint32_t) 0;
         _subnet  = (uint32_t) 0;
-            #if (DEBUG_MODE > CFG_DEBUG_NONE)
+            #if (WIFI_DEBUG_MODE > CFG_DEBUG_NONE)
                 SOUTLN();
                 SOUT(millis()); SOUT(" WIFI scan pList "); SOUTHEX((u_long) plist);
                 SOUT(" pFirst "); SOUTHEXLN((u_long) plist->pFirst());
@@ -334,19 +341,21 @@
         int n = WiFi.scanNetworks();
         if (n == 0)
           {
-              #if (DEBUG_MODE > CFG_DEBUG_NONE)
+              #if (WIFI_DEBUG_MODE > CFG_DEBUG_NONE)
                   SOUTLN("no networks found");
                 #endif
           }
         else
           {
-                #if (DEBUG_MODE > CFG_DEBUG_NONE)
+                #if (WIFI_DEBUG_MODE > CFG_DEBUG_NONE)
                     SOUT(n); SOUTLN(" networks found");
                   #endif
             //uint8_t  s = 0;
             ip_cell* pip = (ip_cell*) plist->pFirst();
+                #if (WIFI_DEBUG_MODE > CFG_DEBUG_NONE)
                     //SOUT(" scanWIFI pList "); SOUTHEX((u_long) plist);
                     //SOUT("  pip "); SOUTHEXLN((u_long) pip);
+                  #endif
             for (uint8_t i = 0; i < n; ++i)
               {
                 // Print SSID and RSSI for each network found
@@ -358,17 +367,17 @@
                     _locip  = pip->locIP();
                     _gateip = pip->gwIP();
                     _subnet = pip->snIP();
-                    #if (DEBUG_MODE > CFG_DEBUG_NONE)
+                    #if (WIFI_DEBUG_MODE > CFG_DEBUG_NONE)
                         SOUT(" used: "); SOUT((char*) _ssid); SOUT(" - ");
                       #endif
                   }
                 else
                   {
-                    #if (DEBUG_MODE > CFG_DEBUG_NONE)
+                    #if (WIFI_DEBUG_MODE > CFG_DEBUG_STARTUP)
                         SOUT("       ");
                       #endif
                   }
-                #if (DEBUG_MODE > CFG_DEBUG_NONE)
+                #if (WIFI_DEBUG_MODE > CFG_DEBUG_STARTUP)
                     SOUT(WiFi.SSID(i));
                     SOUT(" ("); SOUT(WiFi.RSSI(i)); Serial.print(")");
                     SOUTLN((WiFi.encryptionType(i) == WIFI_AUTH_OPEN)?" ":"*");
@@ -381,22 +390,31 @@
         else                    { return WIFI_ERR; };
       }
 
-    bool md_wifi::startWIFI()
+    bool md_wifi::startWIFI(bool _useLocID)
       {
-                    #if (DEBUG_MODE > CFG_DEBUG_NONE)
+                    #if (WIFI_DEBUG_MODE > CFG_DEBUG_NONE)
                         SOUT(millis()); SOUTLN(" md_startWIFI");
                       #endif
                 //_debugConn();
         if (strlen(_ssid) == 0)
           { // keine SSID
-                    #if (DEBUG_MODE > CFG_DEBUG_NONE)
+                    #if (WIFI_DEBUG_MODE > CFG_DEBUG_NONE)
                         SOUT(millis());
                         SOUT(" SSID nicht initialisiert ");
                       #endif
             return WIFI_ERR;
           }
                  //_debugConn();
-        WiFi.config(_locip, _gateip, _subnet);
+        if(_useLocID)
+          {
+            WiFi.config(_locip, _gateip, _subnet);
+                    #if (WIFI_DEBUG_MODE > CFG_DEBUG_NONE)
+                        Serial.print("set locIP '"); Serial.print(_locip); Serial.println("'");
+                      #endif
+          }
+                    #if (WIFI_DEBUG_MODE > CFG_DEBUG_NONE)
+                        Serial.print("Starte '"); Serial.print(_ssid); Serial.print("' - '");  Serial.print(_passw); Serial.println("'");
+                      #endif
         WiFi.begin(_ssid, _passw); // start connection
                  //_debugConn();
         // Wait for connection
@@ -404,7 +422,7 @@
         uint8_t repOut = (uint8_t) _conn_rep;
         while ((WiFi.status() != WL_CONNECTED) && (repOut > 0))
           {
-                    #if (DEBUG_MODE > CFG_DEBUG_NONE)
+                    #if (WIFI_DEBUG_MODE > CFG_DEBUG_NONE)
                         Serial.print(".");
                       #endif
             usleep(_conn_delay);
@@ -416,7 +434,7 @@
             _debugConn(TRUE);
             if (MDNS.begin("esp32"))
             {
-                    #if (DEBUG_MODE > CFG_DEBUG_NONE)
+                    #if (WIFI_DEBUG_MODE > CFG_DEBUG_NONE)
                         Serial.println("MDNS responder started");Serial.println();
                       #endif
             }
@@ -424,7 +442,7 @@
           }
           else
           {
-                    #if (DEBUG_MODE > CFG_DEBUG_NONE)
+                    #if (WIFI_DEBUG_MODE > CFG_DEBUG_NONE)
                         Serial.println("Connection failed -> timout");
                       #endif
           }
@@ -432,7 +450,7 @@
       }
     void md_wifi::_debugConn(bool _wifi)
       {
-        #if (DEBUG_MODE > CFG_DEBUG_NONE)
+        #if (WIFI_DEBUG_MODE > CFG_DEBUG_NONE)
             if (_wifi == TRUE)
               {
                 SOUTLN("");
@@ -483,7 +501,7 @@
           });
         webServ.onNotFound(handleNotFound);
         webServ.begin();
-        #if (DEBUG_MODE > CFG_DEBUG_NONE)
+        #if (WIFI_DEBUG_MODE > CFG_DEBUG_NONE)
              Serial.println("HTTP server started");
           #endif
         return false;
