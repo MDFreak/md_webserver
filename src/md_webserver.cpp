@@ -1,9 +1,15 @@
+//#ifdef _MD_WEB_SERVER_H_
+
 #include <md_webserver.h>
 
 // --- declaration
   //
   // --- webserver
-    WebServer webServ(80);
+    #ifdef USE_ASYNCWEBSERVER
+      AsyncWebServer webServ(80);
+    #else
+      WebServer webServ(80);
+    #endif
     //md_server webMD   = md_server();
     //#define WIFI_DEBUG_MODE  CFG_DEBUG_NONE
     #ifndef WIFI_DEBUG_MODE
@@ -526,3 +532,4 @@
     }
   #endif
 
+//#endif

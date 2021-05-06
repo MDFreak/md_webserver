@@ -1,13 +1,26 @@
 #ifndef _MD_WEB_SERVER_H_
+//#ifdef _MD_WEB_SERVER_H_
   #define _MD_WEB_SERVER_H_
 
+  //#define USE_ASYNCWEBSERVER
+
+  #include <Arduino.h>
+  #include <time.h>
+  //#include <Time.h>
+  //#include <TimeLib.h>
   #include <WiFi.h>
   #include <WiFiUdp.h>
-  #include <WebServer.h>
   #include <ESPmDNS.h>
   #include <md_defines.h>
   #include <md_util.h>
   #include <ip_list.hpp>
+
+  #if defined (USE_ASYNCWEBSERVER)
+    #include <AsyncTCP.h>
+    //#include <ESPAsyncWebServer.h>
+  #else
+    #include <WebServer.h>
+  #endif
 
   #define WIFI_OK   false
   #define WIFI_ERR  true
@@ -48,7 +61,7 @@
       public:
         md_NTPTime(){}
         ~md_NTPTime(){}
-        bool getTime(time_t *ntpEpoche );
+        bool getTime    (time_t *ntpEpoche );
         bool initNTPTime(uint8_t summer);
       protected:
         uint64_t sendNTPpacket(IPAddress& address);
@@ -69,10 +82,10 @@
       public:
         md_wifi();
         ~md_wifi(){}
-        bool scanWIFI(ip_list* plist);
-        bool startWIFI(bool _useLocID = FALSE);
-        bool getNTPTime(time_t *ntpEpoche ) { return getTime(ntpEpoche); }
-        bool initNTP(uint8_t summer) { return initNTPTime(summer); }
+        bool scanWIFI  (ip_list* plist);
+        bool startWIFI (bool _useLocID = FALSE);
+        bool getNTPTime(time_t *ntpEpoche) { return getTime(ntpEpoche); }
+        bool initNTP   (uint8_t summer)    { return initNTPTime(summer); }
 
       protected:
         void _debugConn(bool _wifi = FALSE);
