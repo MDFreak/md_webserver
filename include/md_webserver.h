@@ -2,12 +2,12 @@
 //#ifdef _MD_WEB_SERVER_H_
   #define _MD_WEB_SERVER_H_
 
-  //#define USE_ASYNCWEBSERVER
+  #define USE_ASYNCWEBSERVER
 
   #include <Arduino.h>
   #include <time.h>
   //#include <Time.h>
-  //#include <TimeLib.h>
+  #include <md_time.hpp>
   #include <WiFi.h>
   #include <WiFiUdp.h>
   #include <ESPmDNS.h>
@@ -16,11 +16,12 @@
   #include <ip_list.hpp>
 
   #if defined (USE_ASYNCWEBSERVER)
-    #include <AsyncTCP.h>
-    //#include <ESPAsyncWebServer.h>
+      #include <AsyncTCP.h>
+      #include <ESPAsyncWebServer.h>
+      #include "SPIFFS.h"
   #else
-    #include <WebServer.h>
-  #endif
+      #include <WebServer.h>
+    #endif
 
   #define WIFI_OK   false
   #define WIFI_ERR  true
@@ -94,8 +95,11 @@
   class md_server
     {
       public:
-        bool md_startServer();
-        bool md_handleClient();
+        bool    md_startServer();
+        bool    md_handleClient();
+        void    initWebSocket();
+        void    initSPIFFS();
+        uint8_t getDutyCycle(int8_t idx = 1);
 
       protected:
         String       _header;          // store HTTP-request

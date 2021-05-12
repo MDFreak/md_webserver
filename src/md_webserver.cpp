@@ -6,12 +6,21 @@
   //
   // --- webserver
     #ifdef USE_ASYNCWEBSERVER
+      // Create AsyncWebServer object on port 80
       AsyncWebServer webServ(80);
+      // Create a WebSocket object
+      AsyncWebSocket ws("/ws");
+      String sliderValue1 = "0";
+      int dutyCycle1;
+      String sliderValue2 = "0";
+      int dutyCycle2;
+      String sliderValue3 = "0";
+      int dutyCycle3;
     #else
       WebServer webServ(80);
     #endif
     //md_server webMD   = md_server();
-    //#define WIFI_DEBUG_MODE  CFG_DEBUG_NONE
+    #define WIFI_DEBUG_MODE  CFG_DEBUG_NONE
     #ifndef WIFI_DEBUG_MODE
         #define WIFI_DEBUG_MODE  CFG_DEBUG_STARTUP
       #endif
@@ -150,6 +159,40 @@
 
   //
   // --- callback webserver -------------
+    void handleWebSocketMessage(void *arg, uint8_t *data, size_t len)
+      {
+          AwsFrameInfo *info = (AwsFrameInfo*)arg;
+          if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT)
+            {
+              data[len] = 0;
+              SOUT(" handleWebSocketMessage info->final "); SOUT(info->final);
+              SOUT(" info->index "); SOUT(info->index); SOUT(" len "); SOUT(len);
+              SOUT(" data "); SOUTLN((char*) data);
+              sliderValue1 = (char*)data;
+              dutyCycle1 = map(sliderValue1.toInt(), 0, 100, 0, 255);
+            }
+        }
+
+    void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type,
+                 void *arg, uint8_t *data, size_t len)
+      {
+        switch (type)
+          {
+            case WS_EVT_CONNECT:
+              Serial.printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
+              break;
+            case WS_EVT_DISCONNECT:
+              Serial.printf("WebSocket client #%u disconnected\n", client->id());
+              break;
+            case WS_EVT_DATA:
+              handleWebSocketMessage(arg, data, len);
+              break;
+            case WS_EVT_PONG:
+            case WS_EVT_ERROR:
+              break;
+          }
+      }
+/*
     void drawGraph()
       {
         String out = "";
@@ -205,7 +248,8 @@
         #endif
       }
 
-    void handleNotFound()
+    void handleNotFou
+    nd()
       {
         #ifdef BOARD_LED
           digitalWrite(BOARD_LED, 1);
@@ -234,6 +278,7 @@
 
 
 
+*/
 //
 // --- classes
   //
@@ -499,24 +544,71 @@
   // --- class md_server --------------------------
     bool md_server::md_startServer()
       {
-        webServ.on("/", handleRoot);
-        webServ.on("/test.svg", drawGraph);
-        webServ.on("/inline", []()
-          {
-            webServ.send(200, "text/plain", "this works as well");
-          });
-        webServ.onNotFound(handleNotFound);
+        initSPIFFS();
+        initWebSocket();
+        // Web Server Root URL
+        webServ.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
+                    { request->send(SPIFFS, "/index.html", "text/html"); }
+                  );
+        webServ.serveStatic("/", SPIFFS, "/");
+        webServ.on("/currentValue1", HTTP_GET, [](AsyncWebServerRequest *request)
+                    { request->send(200, "/text/plain", String(sliderValue1).c_str()); }
+                  );
+        webServ.on("/currentValue2", HTTP_GET, [](AsyncWebServerRequest *request)
+                    { request->send(200, "/text/plain", String(sliderValue2).c_str()); }
+                  );
+        webServ.on("/currentValue3", HTTP_GET, [](AsyncWebServerRequest *request)
+                    { request->send(200, "/text/plain", String(sliderValue3).c_str()); }
+                  );
+        // Start server
         webServ.begin();
-        #if (WIFI_DEBUG_MODE > CFG_DEBUG_NONE)
-             Serial.println("HTTP server started");
-          #endif
         return false;
+          /*
+            webServ.on("/", handleRoot);
+            webServ.on("/test.svg", drawGraph);
+            webServ.on("/inline", []()
+              {
+                webServ.send(200, "text/plain", "this works as well");
+              });
+            webServ.onNotFound(handleNotFound);
+            webServ.begin();
+            #if (WIFI_DEBUG_MODE > CFG_DEBUG_NONE)
+                 Serial.println("HTTP server started");
+              #endif
+          */
+      }
+
+    void md_server::initWebSocket()
+      {
+        ws.onEvent(onEvent);
+        webServ.addHandler(&ws);
+      }
+
+    void md_server::initSPIFFS()
+      {
+        if (!SPIFFS.begin(true))
+          { Serial.println("An error has occurred while mounting SPIFFS"); }
+        else
+          { Serial.println("SPIFFS mounted successfully"); }
+      }
+
+    uint8_t md_server::getDutyCycle(int8_t idx)
+      {
+        switch (idx)
+          {
+            case 1: return (uint8_t) dutyCycle1; break;
+            case 2: return (uint8_t) dutyCycle2; break;
+            case 3: return (uint8_t) dutyCycle3; break;
+            default: return 0; break;
+          }
       }
 
     bool md_server::md_handleClient()
       {
-        webServ.handleClient();
         return false;
+          /*
+            webServ.handleClient();
+          */
       }
 
 //
