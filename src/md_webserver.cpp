@@ -1,25 +1,17 @@
 //#ifdef _MD_WEB_SERVER_H_
-
 #include <md_webserver.h>
 
 // --- declaration
+  #define WS_IDX_OFFSET 97   // 'a'
   //
   // --- webserver
-    #ifdef USE_ASYNCWEBSERVER
-      // Create AsyncWebServer object on port 80
-      AsyncWebServer webServ(80);
-      // Create a WebSocket object
-      AsyncWebSocket ws("/ws");
-      String sliderValue1 = "0";
-      int dutyCycle1;
-      String sliderValue2 = "0";
-      int dutyCycle2;
-      String sliderValue3 = "0";
-      int dutyCycle3;
-    #else
-      WebServer webServ(80);
-    #endif
-    //md_server webMD   = md_server();
+    AsyncWebServer webServ(80);   // Create AsyncWebServer object on port 80
+    AsyncWebSocket ws("/ws");     // Create a WebSocket object
+    uint8_t dutyCycle[3] = {0,0,0};
+    md_list* pledList = new md_list();
+    md_list* pswList  = new md_list();
+    md_list* panaList = new md_list();
+
     #define WIFI_DEBUG_MODE  CFG_DEBUG_NONE
     #ifndef WIFI_DEBUG_MODE
         #define WIFI_DEBUG_MODE  CFG_DEBUG_STARTUP
@@ -32,7 +24,7 @@
     unsigned int localPort = 2390;
     IPAddress    timeServer(129, 6, 15, 28);
     const int    NTP_PACKET_SIZE = 48;
-    byte         packetBuffer[ NTP_PACKET_SIZE];
+    byte         packetBuffer[NTP_PACKET_SIZE];
     WiFiUDP      udp;
 //
 // --- callback functions
@@ -159,17 +151,50 @@
 
   //
   // --- callback webserver -------------
+    //void handleWebSocketMessage(void *arg, uint8_t *data, size_t len)
     void handleWebSocketMessage(void *arg, uint8_t *data, size_t len)
       {
           AwsFrameInfo *info = (AwsFrameInfo*)arg;
+          char* txt = (char*) data;
           if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT)
             {
+                        //SOUT(" handleWebSocketMessage info->index "); SOUT(info->index);
+                        //SOUT(" info->final "); SOUT(info->final);
+                        //SOUT(" info->len "); SOUTLN(info->len);
               data[len] = 0;
-              SOUT(" handleWebSocketMessage info->final "); SOUT(info->final);
-              SOUT(" info->index "); SOUT(info->index); SOUT(" len "); SOUT(len);
-              SOUT(" data "); SOUTLN((char*) data);
-              sliderValue1 = (char*)data;
-              dutyCycle1 = map(sliderValue1.toInt(), 0, 100, 0, 255);
+              uint8_t type  = txt[0];  // extract obj type
+              uint8_t index = txt[1] - WS_IDX_OFFSET;  // extract index
+              int16_t value = atoi(&txt[2]);
+                        //SOUT(" Payload type "); SOUT(type);
+                        //SOUT(" index "); SOUT(index); SOUT(" len "); SOUT(len);
+                        //SOUT(" data '"); SOUT(&txt[2]); SOUT(" = "); SOUT(value);
+                        //SOUT(" ledList cnt "); SOUTLN(pledList->count());
+              if (type == WS_TYPE_SLIDER)
+                {
+                  md_slider* psl = (md_slider*) pledList->pIndex(index);
+                        //SOUT(" psl "); SOUTHEX((uint32_t) psl);
+                  if (psl != NULL)
+                    {
+                      psl->val = value; SOUT(" slider "); SOUTLN(value);
+                    }
+                }
+              else if (type == WS_TYPE_SWITCH)
+                {
+                  md_switch* psw = (md_switch*) pswList->pIndex(index);
+                  while (psw != NULL)
+                    {
+                      psw->state = value; SOUT(" switch "); SOUTLN(value);
+                    }
+                }
+              else if (type == WS_TYPE_ANALOG)
+                {
+                  md_analog* pana = (md_analog*) panaList->pIndex(index);
+                  while (pana != NULL)
+                    {
+                      pana->val = value; SOUT(" analog "); SOUTLN(value);
+                    }
+                }
+              else { }
             }
         }
 
@@ -542,7 +567,7 @@
       }
   //
   // --- class md_server --------------------------
-    bool md_server::md_startServer()
+    bool md_server::md_startServer(uint8_t switches, uint8_t pwms, uint8_t analogs)
       {
         initSPIFFS();
         initWebSocket();
@@ -551,15 +576,47 @@
                     { request->send(SPIFFS, "/index.html", "text/html"); }
                   );
         webServ.serveStatic("/", SPIFFS, "/");
-        webServ.on("/currentValue1", HTTP_GET, [](AsyncWebServerRequest *request)
-                    { request->send(200, "/text/plain", String(sliderValue1).c_str()); }
-                  );
-        webServ.on("/currentValue2", HTTP_GET, [](AsyncWebServerRequest *request)
-                    { request->send(200, "/text/plain", String(sliderValue2).c_str()); }
-                  );
-        webServ.on("/currentValue3", HTTP_GET, [](AsyncWebServerRequest *request)
-                    { request->send(200, "/text/plain", String(sliderValue3).c_str()); }
-                  );
+        // init serverdata
+        uint8_t i;
+                  //SOUT(" start_Server sw pwm ana "); SOUT(switches);
+                  //SOUT(" "); SOUT(pwms); SOUT(" "); SOUTLN(analogs);
+        _pswList   = pswList;
+                  //SOUT(" load switches ");
+        for ( i=0 ; i<switches ; i++ )
+          {
+            md_switch* ptmp = new md_switch();
+            String*    pstr = new String("SW ");
+            pstr->concat(i+1);
+            ptmp->pName = pstr;
+                  //SOUT(ptmp->name); SOUT(" )");
+            _pswList->add((void*) ptmp);
+          }
+                  //SOUTLN();
+        _pslidList = pledList;
+                  //SOUT(" load LEDs ");
+        for ( i=0 ; i<pwms ; i++ )
+          {
+            md_slider* ptmp = new md_slider();
+            String*    pstr = new String("LED ");
+            pstr->concat(i+1);
+            ptmp->pName = pstr;
+                  //SOUT(ptmp->idx); SOUT(" ");
+                  //SOUT(*(ptmp->pName)); SOUT(" ");
+            _pslidList->add((void*) ptmp);
+          }
+                  //SOUTLN();
+        _panaList  = panaList;
+                  //SOUT(" load anas ");
+        for ( i=0 ; i<analogs ; i++ )
+          {
+            md_analog* ptmp = new md_analog();
+            String*    pstr = new String("Analog ");
+            pstr->concat(i+1);
+            ptmp->pName = pstr;
+                  //SOUT(ptmp->name); SOUT(" ");
+            _panaList->add((void*) ptmp);
+          }
+                  //SOUTLN();
         // Start server
         webServ.begin();
         return false;
@@ -592,14 +649,20 @@
           { Serial.println("SPIFFS mounted successfully"); }
       }
 
-    uint8_t md_server::getDutyCycle(int8_t idx)
+    uint8_t md_server::getDutyCycle(uint8_t idx)
       {
-        switch (idx)
+        md_slider* ptmp = (md_slider*) pledList->pIndex(idx);
+                //SOUT(" getDutyCycle idx "); SOUT(idx);
+                //SOUT(" ptmp "); SOUTHEXLN((uint32_t) ptmp);
+        if (ptmp != NULL)
           {
-            case 1: return (uint8_t) dutyCycle1; break;
-            case 2: return (uint8_t) dutyCycle2; break;
-            case 3: return (uint8_t) dutyCycle3; break;
-            default: return 0; break;
+                //SOUT(" val "); SOUTLN(ptmp->val);
+            return ptmp->val;
+          }
+        else
+          {
+                //SOUTLN();
+            return 0;
           }
       }
 
