@@ -3,6 +3,7 @@
   #define _MD_WEB_SERVER_H_
 
   #include <Arduino.h>
+  #include <stdlib.h>
   #include <time.h>
   //#include <Time.h>
   #include <md_time.hpp>

@@ -12,6 +12,8 @@
     md_list* pswList  = new md_list();
     md_list* panaList = new md_list();
 
+//xTaskCreatePinnedToCore
+
     #define WIFI_DEBUG_MODE  CFG_DEBUG_NONE
     #ifndef WIFI_DEBUG_MODE
         #define WIFI_DEBUG_MODE  CFG_DEBUG_STARTUP
@@ -151,52 +153,52 @@
 
   //
   // --- callback webserver -------------
-    //void handleWebSocketMessage(void *arg, uint8_t *data, size_t len)
-    void handleWebSocketMessage(void *arg, uint8_t *data, size_t len)
+    void handleWebSocketMessage(AsyncWebSocketClient *client, void *arg, uint8_t *data, size_t len)
       {
-          AwsFrameInfo *info = (AwsFrameInfo*)arg;
-          char* txt = (char*) data;
-          if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT)
-            {
-                        //SOUT(" handleWebSocketMessage info->index "); SOUT(info->index);
-                        //SOUT(" info->final "); SOUT(info->final);
-                        //SOUT(" info->len "); SOUTLN(info->len);
-              data[len] = 0;
-              uint8_t type  = txt[0];  // extract obj type
-              uint8_t index = txt[1] - WS_IDX_OFFSET;  // extract index
-              int16_t value = atoi(&txt[2]);
-                        //SOUT(" Payload type "); SOUT(type);
-                        //SOUT(" index "); SOUT(index); SOUT(" len "); SOUT(len);
-                        //SOUT(" data '"); SOUT(&txt[2]); SOUT(" = "); SOUT(value);
-                        //SOUT(" ledList cnt "); SOUTLN(pledList->count());
-              if (type == WS_TYPE_SLIDER)
-                {
-                  md_slider* psl = (md_slider*) pledList->pIndex(index);
-                        //SOUT(" psl "); SOUTHEX((uint32_t) psl);
-                  if (psl != NULL)
-                    {
-                      psl->val = value; SOUT(" slider "); SOUTLN(value);
-                    }
-                }
-              else if (type == WS_TYPE_SWITCH)
-                {
-                  md_switch* psw = (md_switch*) pswList->pIndex(index);
-                  while (psw != NULL)
-                    {
-                      psw->state = value; SOUT(" switch "); SOUTLN(value);
-                    }
-                }
-              else if (type == WS_TYPE_ANALOG)
-                {
-                  md_analog* pana = (md_analog*) panaList->pIndex(index);
-                  while (pana != NULL)
-                    {
-                      pana->val = value; SOUT(" analog "); SOUTLN(value);
-                    }
-                }
-              else { }
-            }
-        }
+        AwsFrameInfo *info = (AwsFrameInfo*)arg;
+        char* txt = (char*) data;
+        if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT)
+          {
+                    //  SOUT(" handleWebSocketMessage info->index "); SOUT(info->index);
+                      //SOUT(" info->final "); SOUT(info->final);
+                      //SOUT(" info->len "); SOUTLN(info->len);
+            data[len] = 0;
+            uint8_t type  = txt[0];  // extract obj type
+            uint8_t index = txt[1] - WS_IDX_OFFSET;  // extract index
+            int16_t value = atoi(&txt[2]);
+                      //SOUT(" Payload type "); SOUT(type);
+                      //SOUT(" index "); SOUT(index); SOUT(" len "); SOUT(len);
+                      //SOUT(" data '"); SOUT(&txt[2]); SOUT(" = "); SOUT(value);
+                      //SOUT(" ledList cnt "); SOUTLN(pledList->count());
+            if (type == WS_TYPE_SLIDER)
+              {
+                md_slider* psl = (md_slider*) pledList->pIndex(index);
+                      //SOUT(" psl "); SOUTHEX((uint32_t) psl);
+                if (psl != NULL)
+                  {
+                    psl->val = value;
+                    SOUT(" slider "); SOUT((index+1)); SOUT("="); SOUTLN(value);
+                  }
+              }
+            else if (type == WS_TYPE_SWITCH)
+              {
+                md_switch* psw = (md_switch*) pswList->pIndex(index);
+                while (psw != NULL)
+                  {
+                    psw->state = value; SOUT(" switch "); SOUTLN(value);
+                  }
+              }
+            else if (type == WS_TYPE_ANALOG)
+              {
+                md_analog* pana = (md_analog*) panaList->pIndex(index);
+                while (pana != NULL)
+                  {
+                    pana->val = value; SOUT(" analog "); SOUTLN(value);
+                  }
+              }
+            else { }
+          }
+      }
 
     void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type,
                  void *arg, uint8_t *data, size_t len)
@@ -210,7 +212,7 @@
               Serial.printf("WebSocket client #%u disconnected\n", client->id());
               break;
             case WS_EVT_DATA:
-              handleWebSocketMessage(arg, data, len);
+              handleWebSocketMessage(client, arg, data, len);
               break;
             case WS_EVT_PONG:
             case WS_EVT_ERROR:
