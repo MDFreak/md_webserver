@@ -1,0 +1,32 @@
+Starting parse
+Entering state 0
+Reading a token: Next token is token $undefined ()
+Shifting token error ()
+Entering state 1
+Next token is token $undefined ()
+Error: discarding token $undefined ()
+Error: popping token error ()
+Stack now 0
+Shifting token error ()
+Entering state 1
+Reading a token: Next token is token T_UNVERIFIED ()
+Error: discarding token T_UNVERIFIED ()
+Error: popping token error ()
+Stack now 0
+Shifting token error ()
+Entering state 1
+Reading a token: Next token is token T_UNVERIFIED ()
+Error: discarding token T_UNVERIFIED ()
+Error: popping token error ()
+Stack now 0
+Shifting token error ()
+Entering state 1
+Reading a token: Next token is token T_UNVERIFIED ()
+Error: discarding token T_UNVERIFIED ()
+Error: popping token error ()
+Stack now 0
+Shifting token error ()
+Entering state 1
+Reading a token: Now at end of input.
+Stack now 0 1
+Cleanup: popping token error ()
