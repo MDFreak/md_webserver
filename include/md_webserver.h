@@ -14,14 +14,18 @@
     #include <md_defines.h>
     #include <md_util.h>
     #include <ip_list.hpp>
+    #include <functional>
 
     #include <AsyncTCP.h>
     #include <ESPAsyncWebServer.h>
-    #include "SPIFFS.h"
+    #include <ArduinoJSON.h>
+    #include <SPIFFS.h>
 
   // --- declarations
     #define WIFI_OK   false
     #define WIFI_ERR  true
+
+    using fptr = std::function<void()>;
 
     enum // locIP Status
       {
@@ -34,10 +38,24 @@
 
     typedef char LoginTxt_t[LOGINTXT_MAX_LEN + 1];
 
+    enum dataFormat
+      {
+        MD_SINGLE  =  'S', // [typeElement][idx][value]
+        MD_MULTI   =  'M', // [typeElement][idx][value],[typeElement][idx][value],...
+        MD_TEXT    =  'T'  // [text value]
+      };
+
+    enum typeMessage
+      {
+        ME_TSOCKET =  0,
+        ME_TVAL    = 'V',
+        ME_TCONN   = 'C',
+        ME_TREQ    = 'R'
+      };
+
   // element of webserver
     enum typeElement
       {
-        EL_TSOCKET = 0,
         EL_TFIRST  = 'A',
         EL_TANALOG = 'A', // A = 65
         EL_TSLIDER,       // B = 66
@@ -51,13 +69,6 @@
         EL_TMAX,
         EL_TCNT    = EL_TMAX - EL_TFIRST
       };
-
-    typedef struct mdMsg_struct
-      {
-        uint8_t client  = 0;
-        char    type    = EL_TSOCKET;
-        String  payload = "";
-      } mdMSG_t;
 
     class md_slider : public md_cell
       {
@@ -91,12 +102,48 @@
           String   unit;
       };
 
+    /* --- md_message fromat description ---
+     *  _client:  client of webserver
+     *  _tMsg:      + type of data (S=single, M=multi, T=text)
+     *  _tData:     |+ type of message 1 char ( V=value, R=request)
+     *  _payload_S: xxx
+     *              ||+ value
+     *              |+ index
+     *              + type of element
+     *  _payload_M: xxx
+     *              ||+ ?
+     *              |+ ?
+     *              + ?
+     *  _payload_T: <text>
+     */
     class md_message : public md_cell
       {
-        public:
-          mdMSG_t* pMsg = new mdMSG_t;
+        private:
+          //void*   _msg     = NULL;
+          uint8_t _client  = 0;
+          char    _tMsg    = 0;  // ENUM typeMessage
+          char    _tData   = MD_SINGLE;
+          String  _payload = "";
 
-          ~md_message() { if (pMsg != NULL) delete pMsg; }
+        public:
+          md_message()   { }
+          md_message(uint8_t client, char msgType, char* payload)
+                         { _client = client; _tMsg = msgType; _payload = payload; }
+          ~md_message()  { }
+
+          void*   pMsg   ()                 { return this;         }
+          void    client (uint8_t client)   { _client  = client;   }
+          void    msgType(uint8_t tMsg)     { _tMsg    = tMsg;     }
+          void    dataType(uint8_t tData)   { _tData   = tData;    }
+          void    payload(char*   ppayload) { _payload = ppayload; }
+          uint8_t client () const           { return _client;      }
+          char    msgType() const           { return _tMsg;        }
+          char    dataType()                { return _tData;       }
+          char*   payload()                 { return _payload.begin() ;}
+          //void    valType(uint8_t tVal)     { _tVal    = tVal;     }
+          //char    valType() const           { return _tVal;        }
+          //void    index  (char    idx)      { _idx     = idx;      }
+          //char    index  () const           { return _idx;         }
       };
 
     class md_msglist : public md_list
@@ -111,7 +158,8 @@
       };
 
     #ifndef MESSAGE_LIST
-        extern md_msglist* msgList;  // (FIFO-) buffer for message requests
+        extern md_msglist*inMsgs;  // (FIFO-) buffer for message requests
+        extern md_msglist*outMsgs;  // (FIFO-) buffer for message requests
         #define MESSAGE_LIST
       #endif
   // classes for netservice
@@ -174,18 +222,20 @@
     class md_server
       {
         public:
+          bool    isRequest = false;
           bool    md_startServer();
           uint8_t createElement(uint8_t type, String name, String unit = "");
-          void    handleClient(AwsEventType type, AsyncWebSocketClient *client,
-                               void *arg, uint8_t *data, size_t len);
           void    initWebSocket();
           void    initSPIFFS();
           uint8_t getDutyCycle(uint8_t idx = 1);
+          void    updateAll(const String data);
+          void    handleClient(AwsEventType type, AsyncWebSocketClient *client,
+                               void *arg, uint8_t *data, size_t len);
 
         protected:
-          void    createDefElements(uint8_t switches, uint8_t pwms, uint8_t analogs);
           String  _header;   // store HTTP-request
+                             //void    createDefElements(uint8_t switches, uint8_t pwms, uint8_t analogs);
       };
-
+    extern md_server* pmdServ;
 
 #endif

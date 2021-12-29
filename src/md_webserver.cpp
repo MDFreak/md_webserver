@@ -17,15 +17,15 @@
     AsyncWebSocket ws("/ws");     // Create a WebSocket object
     //uint8_t dutyCycle[3] = {0,0,0};
 
-    md_server*     pwebSrv = NULL;
-    TaskHandle_t*  pmsgHdl = NULL;
+    //TaskHandle_t*  pmsgHdl = NULL;
 
     // list of active elements on website
     md_list* psliderList = new md_list();
     md_list* pswitchList = new md_list();
     md_list* panalogList = new md_list();
 
-    md_msglist* msgList  = new md_msglist();  // (FIFO-) buffer for message requests
+    md_msglist* outMsgs  = new md_msglist();  // (FIFO-) buffer for message requests
+    md_msglist* inMsgs   = new md_msglist();  // (FIFO-) buffer for message requests
   // --- NTP server ---------------------
     /* time server links
        http://www.hullen.de/helmut/filebox/DCF77/ntpsrvr.html
@@ -49,7 +49,7 @@
             #endif
           while(true)
             {
-              if (msgList->count() > 0)
+              if (inMsgs->count() > 0)
                 {
                   int8_t  doAna = NN;
                     /*
@@ -209,25 +209,13 @@
           }
       #endif
 
-    void md_onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type,
+    void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type,
                  void *arg, uint8_t *data, size_t len)
       {
-        switch (type)
-          {
-            case WS_EVT_PONG:
-              // ignore
-              break;
-            case WS_EVT_ERROR:
-              SOUTLN("svr_onEvent ERROR receive");
-              break;
-            default:
-              pwebSrv->handleClient(type, client, arg, data, len);
-              break;
-          }
+        pmdServ->handleClient(type, client, arg, data, len);
       }
 //
 // --- classes
-  // ------ class md_msglist
   // ------ class md_localIP --------------------------
     bool md_localIP::setIP(uint32_t ip)
       {
@@ -356,6 +344,7 @@
 
         // WiFi.scanNetworks will return the number of networks found
         int n = WiFi.scanNetworks();
+        bool ready = false;
         if (n == 0)
             {
               SOUTLN("  ! no networks found !");
@@ -369,7 +358,7 @@
                       //SOUT(" scanWIFI pList "); SOUTHEX((u_long) plist);
                       //SOUT("  pip "); SOUTHEXLN((u_long) pip);
                     #endif
-              for (uint8_t i = 0; i < n; ++i)
+              for (uint8_t i = 0 ; !ready && (i < n); ++i)
                 {
                   // Print SSID and RSSI for each network found
                   pip = plist->find(WiFi.SSID(i).c_str());
@@ -381,6 +370,7 @@
                         _gateip = pip->gwIP();
                         _subnet = pip->snIP();
                         SOUT(" used: "); SOUT((char*) _ssid); SOUT(" - ");
+                        ready = true;
                       }
                     else
                       {
@@ -492,19 +482,18 @@
     bool    md_server::md_startServer()
       {
         initSPIFFS();
-        initWebSocket();
+        //initWebSocket();
         // Web Server Root URL
         webServ.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
                     { request->send(SPIFFS, "/index.html", "text/html"); }
                   );
         webServ.serveStatic("/", SPIFFS, "/");
-                  // install data handler
-                  //createDefElements(switches, pwms, analogs);
+        ws.onEvent(onWsEvent);
+        webServ.addHandler(&ws);
         // start server
         webServ.begin();
                   // start tasks
-                  //startMsgHandlerTask();
-        pwebSrv = this;
+        pmdServ = this;
         return false;
           /*
             webServ.on("/", handleRoot);
@@ -574,14 +563,14 @@
         return idx;
       }
 
-    void    md_server::initWebSocket()
-      {
-        SOUT(" initWebSocket ... ");
-        ws.onEvent(md_onEvent);
-        webServ.addHandler(&ws);
-        SOUT(" ready ");
-      }
-
+      #ifdef UNUSED
+        void    md_server::initWebSocket()
+          {
+            SOUT(" initWebSocket ... ");
+            ws.onEvent(onWsEvent);
+            SOUT(" ready ");
+          }
+        #endif
     void    md_server::initSPIFFS()
       {
         if (!SPIFFS.begin(true))
@@ -605,45 +594,59 @@
           }
       }
 
+    void    md_server::updateAll(const String data)
+      {
+        //SOUT(" md_server::updateAll '"); SOUT(data); SOUTLN("'");
+        //if (outMsgs->count() > 0)
+          //{
+            void *pmsg = outMsgs->pFirst();
+            ws.textAll(data);
+          //}
+      }
+
     void    md_server::handleClient(AwsEventType type, AsyncWebSocketClient *client, void *arg, uint8_t *data, size_t len)
       {
         AwsFrameInfo *info = (AwsFrameInfo*)arg;
         char txt[40];
         String* sTxt = new String(); //(char*) data;
         char myIn[len+1];
+
         md_message* message = new md_message();
-        //message->pMsg = new mdMSG_t;
-        message->pMsg->client = client->id();
+          //message->pMsg = new mdMSG_t;
+        message->client(client->id());
         switch (type)
           {
+            case WS_EVT_PONG:
+              break;
+            case WS_EVT_ERROR:
+              SOUTLN("svr_onEvent ERROR receive");
+              break;
             case WS_EVT_CONNECT:
-              sprintf(txt, "new #%u %s", client->id(), client->remoteIP().toString().c_str());
+              message->msgType(ME_TCONN);
+              sprintf(txt, "CONN #%u %s", client->id(), client->remoteIP().toString().c_str());
               break;
             case WS_EVT_DISCONNECT:
               sprintf(txt, "lost #%u %s", client->id(), client->remoteIP().toString().c_str());
-              //SOUTLN(txt);
-              *sTxt = txt;
+                //SOUTLN(txt);
+                //*sTxt = txt;
               break;
             case WS_EVT_DATA:
-              //_pHandler(client, arg, data, len);
-              //SOUTpwebSrv->handleClient(type, client, arg, data, len);
-              //Serial.printf("data #%u: %s", client->id(),  data);
+              memcpy(txt, &data[2], len - 1);
+              SOUT(" WS_EVT_DATA "); SOUTLN(txt);
+              message->msgType(data[0]);
               txt[len] = 0;
-              memcpy(txt, data, len);
-              message->pMsg->type = txt[0];
-              *sTxt = txt;
               break;
             default:
               break;
           }
-        message->pMsg->payload = txt;
-        SOUT(" sTxt "); SOUT(message->pMsg->payload);
+        message->payload(txt);
+        SOUT(" txt "); SOUT(message->payload());
         message->setobj(message);
-        msgList->srvSem = OBJBUSY;
-        //while (msgList->hostSem != OBJBUSY) { SOUTLN("busy"); usleep(10); }
-        msgList->add(message);
-        msgList->srvSem = false;
-        SOUT(" msList.count "); SOUTLN(msgList->count());
+        inMsgs->srvSem = OBJBUSY;
+          //while (inMsgs->hostSem != OBJBUSY) { SOUTLN("busy"); usleep(10); }
+        inMsgs->add(message);
+        inMsgs->srvSem = false;
+        SOUT(" msList.count "); SOUTLN(inMsgs->count());
 
         #ifdef UNUSED
           if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT)
@@ -692,42 +695,44 @@
       }
 
   // ----- md_server private
-    void    md_server::createDefElements(uint8_t switches, uint8_t pwms, uint8_t analogs)
-      {
-        uint8_t i;
-                  //SOUT(" start_Server sw pwm ana "); SOUT(switches);
-                  //SOUT(" "); SOUT(pwms); SOUT(" "); SOUTLN(analogs);
-                  //SOUT(" load switches ");
+    #ifdef UNUSED
+      void    md_server::createDefElements(uint8_t switches, uint8_t pwms, uint8_t analogs)
+        {
+          uint8_t i;
+                    //SOUT(" start_Server sw pwm ana "); SOUT(switches);
+                    //SOUT(" "); SOUT(pwms); SOUT(" "); SOUTLN(analogs);
+                    //SOUT(" load switches ");
 
-        for ( i=0 ; i<switches ; i++ )
-          {
-            md_switch* ptmp = new md_switch();
-            ptmp->name = "SW " + (i+1);
-                  //SOUT(ptmp->name); SOUT(" )");
-            psliderList->add((void*) ptmp);
-          }
-                  //SOUTLN();
-                  //SOUT(" load LEDs ");
-        for ( i=0 ; i<pwms ; i++ )
-          {
-            md_slider* ptmp = new md_slider();
-            ptmp->name = "LED " + (i+1);
-                  //SOUT(ptmp->idx); SOUT(" ");
-                  //SOUT(*(ptmp->name)); SOUT(" ");
-            psliderList->add((void*) ptmp);
-          }
-                  //SOUTLN();
-                  //SOUT(" load anas ");
-        for ( i=0 ; i<analogs ; i++ )
-          {
-            md_analog* ptmp = new md_analog();
-            ptmp->name = "Analog " + (i+1);
-            ptmp->unit = "U_" + (i+1);
-                  //SOUT(ptmp->name); SOUT(" ");
-            panalogList->add((void*) ptmp);
-          }
-                  //SOUTLN();
-      }
+          for ( i=0 ; i<switches ; i++ )
+            {
+              md_switch* ptmp = new md_switch();
+              ptmp->name = "SW " + (i+1);
+                    //SOUT(ptmp->name); SOUT(" )");
+              psliderList->add((void*) ptmp);
+            }
+                    //SOUTLN();
+                    //SOUT(" load LEDs ");
+          for ( i=0 ; i<pwms ; i++ )
+            {
+              md_slider* ptmp = new md_slider();
+              ptmp->name = "LED " + (i+1);
+                    //SOUT(ptmp->idx); SOUT(" ");
+                    //SOUT(*(ptmp->name)); SOUT(" ");
+              psliderList->add((void*) ptmp);
+            }
+                    //SOUTLN();
+                    //SOUT(" load anas ");
+          for ( i=0 ; i<analogs ; i++ )
+            {
+              md_analog* ptmp = new md_analog();
+              ptmp->name = "Analog " + (i+1);
+              ptmp->unit = "U_" + (i+1);
+                    //SOUT(ptmp->name); SOUT(" ");
+              panalogList->add((void*) ptmp);
+            }
+                    //SOUTLN();
+        }
+      #endif
 //
   /*
       void drawGraph()
