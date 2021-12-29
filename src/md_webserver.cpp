@@ -25,7 +25,7 @@
     md_list* pswitchList = new md_list();
     md_list* panalogList = new md_list();
 
-    md_msglist*   msgList = new md_msglist();  // (FIFO-) buffer for message requests
+    md_msglist* msgList  = new md_msglist();  // (FIFO-) buffer for message requests
   // --- NTP server ---------------------
     /* time server links
        http://www.hullen.de/helmut/filebox/DCF77/ntpsrvr.html
@@ -39,43 +39,46 @@
     WiFiUDP      udp;
 //
 // --- tasks
-  void msgHandlerTask(void* pvParameters)
-    {
-      #if (WIFI_DEBUG_MODE > CFG_DEBUG_NONE)
-          String taskMessage = "msHdl task on core ";
-          taskMessage = taskMessage + xPortGetCoreID();
-          SOUT(millis()); SOUT(" "); SOUTLN(taskMessage);
-        #endif
-      while(true)
+  #ifdef UNUSED
+      void msgHandlerTask(void* pvParameters)
         {
-          if (msgList->count() > 0)
+          #if (WIFI_DEBUG_MODE > CFG_DEBUG_NONE)
+              String taskMessage = "msHdl task on core ";
+              taskMessage = taskMessage + xPortGetCoreID();
+              SOUT(millis()); SOUT(" "); SOUTLN(taskMessage);
+            #endif
+          while(true)
             {
-              int8_t  doAna = NN;
-                /*
-                  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-                    request->send(SPIFFS, "/index.html", "text/html",false, processor);
-                  });
-                */
+              if (msgList->count() > 0)
+                {
+                  int8_t  doAna = NN;
+                    /*
+                      server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+                        request->send(SPIFFS, "/index.html", "text/html",false, processor);
+                      });
+                    */
+                }
+              usleep(5000);
             }
-          usleep(5000);
         }
-    }
-
+    #endif
 //
 // --- global functions
-  void startMsgHandlerTask()
-    {
-      xTaskCreatePinnedToCore(
-          msgHandlerTask, // TaskFunction_t pvTaskCode,
-					"msHandlerTask",	// const char * const pcName,
-					10000, // const uint32_t usStackDepth,
-					NULL, // void * const pvParameters,
-					0, // UBaseType_t uxPriority,
-					pmsgHdl, // TaskHandle_t * const pvCreatedTask,
-					0);  // const BaseType_t xCoreID);
+  #ifdef UNUSED
+      void startMsgHandlerTask()
+        {
+          xTaskCreatePinnedToCore(
+              msgHandlerTask, // TaskFunction_t pvTaskCode,
+    					"msHandlerTask",	// const char * const pcName,
+    					10000, // const uint32_t usStackDepth,
+    					NULL, // void * const pvParameters,
+    					0, // UBaseType_t uxPriority,
+    					pmsgHdl, // TaskHandle_t * const pvCreatedTask,
+    					0);  // const BaseType_t xCoreID);
 
-      SOUTLN("msgHdl task created on core 0");
-    }
+          SOUTLN("msgHdl task created on core 0");
+        }
+    #endif
 //
 // --- callback functions
   //
@@ -200,27 +203,25 @@
       }
   //
   // --- callback webserver -------------
-    //void handleWebSocketMessage(AsyncWebSocketClient *client, void *arg, uint8_t *data, size_t len)
-      //{
-      //}
+    #ifdef UNUSED
+        void handleWebSocketMessage(AsyncWebSocketClient *client, void *arg, uint8_t *data, size_t len)
+          {
+          }
+      #endif
 
     void md_onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type,
                  void *arg, uint8_t *data, size_t len)
       {
         switch (type)
           {
-            case WS_EVT_CONNECT:
-              Serial.printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
-              break;
-            case WS_EVT_DISCONNECT:
-              Serial.printf("WebSocket client #%u disconnected\n", client->id());
-              break;
-            case WS_EVT_DATA:
-              //handleWebSocketMessage(client, arg, data, len);
-              pwebSrv->handleClient(client, arg, data, len);
-              break;
             case WS_EVT_PONG:
+              // ignore
+              break;
             case WS_EVT_ERROR:
+              SOUTLN("svr_onEvent ERROR receive");
+              break;
+            default:
+              pwebSrv->handleClient(type, client, arg, data, len);
               break;
           }
       }
@@ -293,7 +294,7 @@
                         else
                           {
                             _seasontime = UTC_WINTERTIME;
-                            SOUT(" = winter  ");
+                            SOUTLN(" = winter");
                           }
                       *ntpEpoche += _seasontime;
                       setTime(*ntpEpoche);
@@ -488,7 +489,7 @@
           #endif
       }
   // ------ class md_server  --------------------------
-    bool    md_server::md_startServer(AsyncCallbackWebHandler* pHandler)
+    bool    md_server::md_startServer()
       {
         initSPIFFS();
         initWebSocket();
@@ -497,13 +498,12 @@
                     { request->send(SPIFFS, "/index.html", "text/html"); }
                   );
         webServ.serveStatic("/", SPIFFS, "/");
-        // install data handler
-        _phandler = pHandler;
-        //createDefElements(switches, pwms, analogs);
+                  // install data handler
+                  //createDefElements(switches, pwms, analogs);
         // start server
         webServ.begin();
-        // start tasks
-        startMsgHandlerTask();
+                  // start tasks
+                  //startMsgHandlerTask();
         pwebSrv = this;
         return false;
           /*
@@ -524,7 +524,7 @@
     uint8_t md_server::createElement(uint8_t type, String name, String unit)
       {
         uint8_t idx = 255;
-        if      ( (psliderList != NULL) && (type == EL_TYPE_SLIDER) )
+        if      ( (psliderList != NULL) && (type == EL_TSLIDER) )
           {
             while ( (psliderList->mode() == OBJDEF) && (psliderList->count() > 0))
               { // remove default elements if necessary
@@ -539,7 +539,7 @@
             idx        = ptmp->index();
             psliderList->add(ptmp);
           }
-        else if ( (pswitchList != NULL) && (type == EL_TYPE_SWITCH) )
+        else if ( (pswitchList != NULL) && (type == EL_TSWITCH) )
           {
             while ( (pswitchList->mode() == OBJDEF) && (pswitchList->count() > 0))
               { // remove default elements if necessary
@@ -554,7 +554,7 @@
             idx        = ptmp->index();
             pswitchList->add(ptmp);
           }
-        else if ( (panalogList != NULL) && (type == EL_TYPE_ANALOG) )
+        else if ( (panalogList != NULL) && (type == EL_TANALOG) )
           {
             while ( (panalogList->mode() == OBJDEF) && (panalogList->count() > 0))
               { // remove default elements if necessary
@@ -576,16 +576,18 @@
 
     void    md_server::initWebSocket()
       {
+        SOUT(" initWebSocket ... ");
         ws.onEvent(md_onEvent);
         webServ.addHandler(&ws);
+        SOUT(" ready ");
       }
 
     void    md_server::initSPIFFS()
       {
         if (!SPIFFS.begin(true))
-          { Serial.println("An error has occurred while mounting SPIFFS"); }
+          { Serial.println("SPIFFS mount ERROR "); }
         else
-          { Serial.println("SPIFFS mounted successfully"); }
+          { Serial.print("SPIFFS mounted "); }
       }
 
     uint8_t md_server::getDutyCycle(uint8_t idx)
@@ -603,52 +605,90 @@
           }
       }
 
-    void    md_server::handleClient(AsyncWebSocketClient *client, void *arg, uint8_t *data, size_t len)
+    void    md_server::handleClient(AwsEventType type, AsyncWebSocketClient *client, void *arg, uint8_t *data, size_t len)
       {
         AwsFrameInfo *info = (AwsFrameInfo*)arg;
-        char* txt = (char*) data;
-        if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT)
-          { //  SOUT(" handleWebSocketMessage info->index "); SOUT(info->index); SOUT(" info->final "); SOUT(info->final); SOUT(" info->len "); SOUTLN(info->len);
-            data[len] = 0;
-            uint8_t type  = txt[0];  // extract obj type
-            uint8_t index = txt[1] - WS_IDX_OFFSET;  // extract index
-            int16_t value = atoi(&txt[2]);
-                      //SOUT(" Payload type "); SOUT(type);
-                      //SOUT(" index "); SOUT(index); SOUT(" len "); SOUT(len);
-                      //SOUT(" data '"); SOUT(&txt[2]); SOUT(" = "); SOUT(value);
-                      //SOUT(" ledList cnt "); SOUTLN(psliderList->count());
-
-            if (type == EL_TYPE_SLIDER)
-              {
-                md_slider* psl = (md_slider*) psliderList->pIndex(index);
-                      //SOUT(" psl "); SOUTHEX((uint32_t) psl);
-                if (psl != NULL)
-                  {
-                    psl->destVal = value;
-                    SOUT(" slider "); SOUT((index+1)); SOUT("="); SOUTLN(value);
-                  }
-              }
-
-            else if (type == EL_TYPE_SWITCH)
-              {
-                md_switch* psw = (md_switch*) pswitchList->pIndex(index);
-                while (psw != NULL)
-                  {
-                    psw->destVal = value; SOUT(" switch "); SOUTLN(value);
-                  }
-              }
-
-            else if (type == EL_TYPE_ANALOG)
-              {
-                md_analog* pana = (md_analog*) panalogList->pIndex(index);
-                while (pana != NULL)
-                  {
-                    pana->destVal = value; SOUT(" analog "); SOUTLN(value);
-                  }
-              }
-
-            else { }
+        char txt[40];
+        String* sTxt = new String(); //(char*) data;
+        char myIn[len+1];
+        md_message* message = new md_message();
+        //message->pMsg = new mdMSG_t;
+        message->pMsg->client = client->id();
+        switch (type)
+          {
+            case WS_EVT_CONNECT:
+              sprintf(txt, "new #%u %s", client->id(), client->remoteIP().toString().c_str());
+              break;
+            case WS_EVT_DISCONNECT:
+              sprintf(txt, "lost #%u %s", client->id(), client->remoteIP().toString().c_str());
+              //SOUTLN(txt);
+              *sTxt = txt;
+              break;
+            case WS_EVT_DATA:
+              //_pHandler(client, arg, data, len);
+              //SOUTpwebSrv->handleClient(type, client, arg, data, len);
+              //Serial.printf("data #%u: %s", client->id(),  data);
+              txt[len] = 0;
+              memcpy(txt, data, len);
+              message->pMsg->type = txt[0];
+              *sTxt = txt;
+              break;
+            default:
+              break;
           }
+        message->pMsg->payload = txt;
+        SOUT(" sTxt "); SOUT(message->pMsg->payload);
+        message->setobj(message);
+        msgList->srvSem = OBJBUSY;
+        //while (msgList->hostSem != OBJBUSY) { SOUTLN("busy"); usleep(10); }
+        msgList->add(message);
+        msgList->srvSem = false;
+        SOUT(" msList.count "); SOUTLN(msgList->count());
+
+        #ifdef UNUSED
+          if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT)
+            {
+              data[len] = 0;
+              uint8_t elType  = txt[0];  // extract obj type
+              uint8_t index = txt[1] - WS_IDX_OFFSET;  // extract index
+              int16_t value = atoi(&txt[2]);
+                        //SOUT(" Payload type "); SOUT(type);
+                        //SOUT(" index "); SOUT(index); SOUT(" len "); SOUT(len);
+                        //SOUT(" data '"); SOUT(&txt[2]); SOUT(" = "); SOUT(value);
+                        //SOUT(" ledList cnt "); SOUTLN(psliderList->count());
+
+              if (elType == EL_TSLIDER)
+                {
+                  md_slider* psl = (md_slider*) psliderList->pIndex(index);
+                        //SOUT(" psl "); SOUTHEX((uint32_t) psl);
+                  if (psl != NULL)
+                    {
+                      psl->destVal = value;
+                      SOUT(" slider "); SOUT((index+1)); SOUT("="); SOUTLN(value);
+                    }
+                }
+
+              else if (elType == EL_TSWITCH)
+                {
+                  md_switch* psw = (md_switch*) pswitchList->pIndex(index);
+                  while (psw != NULL)
+                    {
+                      psw->destVal = value; SOUT(" switch "); SOUTLN(value);
+                    }
+                }
+
+              else if (elType == EL_TANALOG)
+                {
+                  md_analog* pana = (md_analog*) panalogList->pIndex(index);
+                  while (pana != NULL)
+                    {
+                      pana->destVal = value; SOUT(" analog "); SOUTLN(value);
+                    }
+                }
+
+              else { }
+            }
+          #endif
       }
 
   // ----- md_server private
@@ -772,16 +812,5 @@
           #endif
         }
   */
-// --- templates
-  //
-  // template callback WIFI
-  #ifdef Dummy
-      void WiFiGotIP(WiFiEvent_t event, WiFiEventInfo_t info)
-    {
-      Serial.print("WiFi connected - ");
-      Serial.print("IP: ");
-      Serial.println(IPAddress(info.got_ip.ip_info.ip.addr));
-    }
-  #endif
 
 //#endif

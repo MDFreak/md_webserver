@@ -37,14 +37,27 @@
   // element of webserver
     enum typeElement
       {
-        EL_TYPE_OFFSET = 65,
-        EL_TYPE_SLIDER = 65,    // 'A'
-        EL_TYPE_SWITCH,
-        EL_TYPE_ANALOG,
-        EL_TYPE_GRAPH,
-        EL_TYPE_PIC,
-        EL_TYPE_ANZ
+        EL_TSOCKET = 0,
+        EL_TFIRST  = 'A',
+        EL_TANALOG = 'A', // A = 65
+        EL_TSLIDER,       // B = 66
+        EL_TCOLOR,        // C
+        EL_TSWITCH,       // D
+        EL_TTEXT,         // E
+        EL_TOFFSET,       // F
+        EL_TGRAPH,        // G
+        EL_TPIC,          // H
+        EL_TINDEX,        // I
+        EL_TMAX,
+        EL_TCNT    = EL_TMAX - EL_TFIRST
       };
+
+    typedef struct mdMsg_struct
+      {
+        uint8_t client  = 0;
+        char    type    = EL_TSOCKET;
+        String  payload = "";
+      } mdMSG_t;
 
     class md_slider : public md_cell
       {
@@ -81,9 +94,9 @@
     class md_message : public md_cell
       {
         public:
-          char*    pMsg = NULL;
-          int8_t   src  = NN;
-          int8_t   dest = NN;
+          mdMSG_t* pMsg = new mdMSG_t;
+
+          ~md_message() { if (pMsg != NULL) delete pMsg; }
       };
 
     class md_msglist : public md_list
@@ -94,9 +107,13 @@
           void clear();
 
           bool srvSem  = OBJFREE;
-          bool cliSem  = OBJFREE;
+          bool hostSem = OBJFREE;
       };
 
+    #ifndef MESSAGE_LIST
+        extern md_msglist* msgList;  // (FIFO-) buffer for message requests
+        #define MESSAGE_LIST
+      #endif
   // classes for netservice
     class md_localIP
       {
@@ -157,9 +174,10 @@
     class md_server
       {
         public:
-          bool    md_startServer(AsyncCallbackWebHandler* pHandler);
+          bool    md_startServer();
           uint8_t createElement(uint8_t type, String name, String unit = "");
-          void    handleClient(AsyncWebSocketClient *client, void *arg, uint8_t *data, size_t len);
+          void    handleClient(AwsEventType type, AsyncWebSocketClient *client,
+                               void *arg, uint8_t *data, size_t len);
           void    initWebSocket();
           void    initSPIFFS();
           uint8_t getDutyCycle(uint8_t idx = 1);
@@ -167,7 +185,6 @@
         protected:
           void    createDefElements(uint8_t switches, uint8_t pwms, uint8_t analogs);
           String  _header;   // store HTTP-request
-          AsyncCallbackWebHandler* _phandler = NULL;
       };
 
 
