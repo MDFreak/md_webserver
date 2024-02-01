@@ -31,7 +31,7 @@
           LOCIP_OK   = LOCIP_IP | LOCIP_GW | LOCIP_SN
         } LOCIP_status_t;
       typedef char LoginTxt_t[LOGINTXT_MAX_LEN + 1];
-    // classes for netservice
+    // classes for netservice c
       class md_localIP
         {
           public:
