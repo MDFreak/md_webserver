@@ -15,6 +15,7 @@
       #include <md_ip_list.h>
       #include <functional>
     // --- declarations
+      #define MD_WIFI_VERSION "V0.1.0"
       #define WIFI_OK   false
       #define WIFI_ERR  true
       #ifndef LOGINTXT_MAX_LEN
